@@ -10,6 +10,9 @@ from datetime import datetime
 from typing import Dict, Tuple, List
 import io
 
+from openpyxl import Workbook
+from openpyxl.styles import PatternFill
+
 
 class InsuranceExpertSystem:
     """
@@ -355,6 +358,32 @@ def process_csv(uploaded_file) -> pd.DataFrame:
     
     return df
 
+def dataframe_to_colored_excel(df):
+    wb = Workbook()
+    ws = wb.active
+
+    # Write header
+    ws.append(list(df.columns))
+
+    for row_idx, row in df.iterrows():
+        ws.append(list(row.values))
+        decision = row['claim_decision']
+
+        if decision == 'approved':
+            fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+        elif decision == 'rejected':
+            fill = PatternFill(start_color="F4CCCC", end_color="F4CCCC", fill_type="solid")
+        else:
+            fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+
+        for col in range(1, len(df.columns) + 1):
+            ws.cell(row=ws.max_row, column=col).fill = fill
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output
+
 
 def main():
     """Streamlit UI for Insurance Expert System"""
@@ -512,29 +541,34 @@ def main():
                     total_payout = result_df['payable_amount'].sum()
                     st.metric("Total Payout", f"₹{total_payout:,.0f}")
                 
+                st.markdown("### 🎨 Color Legend")
+                st.markdown("""
+                - 🟩 **Green** → Approved  
+                - 🟥 **Red** → Rejected  
+                - 🟨 **Yellow** → Under Investigation  
+                """)
                 # Display results table
                 st.subheader("📋 Detailed Results")
                 
                 # Color code decision column
                 def highlight_decision(row):
                     if row['claim_decision'] == 'approved':
-                        return ['background-color: #d4edda'] * len(row)
+                        return ['background-color: #d4edda; color: black'] * len(row)
                     elif row['claim_decision'] == 'rejected':
-                        return ['background-color: #f8d7da'] * len(row)
+                        return ['background-color: #f8d7da; color: black'] * len(row)
                     else:
-                        return ['background-color: #fff3cd'] * len(row)
-                
+                        return ['background-color: #fff3cd; color: black'] * len(row)
+
                 styled_df = result_df.style.apply(highlight_decision, axis=1)
                 st.dataframe(styled_df, use_container_width=True)
                 
                 # Download processed CSV
-                csv_output = io.StringIO()
-                result_df.to_csv(csv_output, index=False)
+                excel_file = dataframe_to_colored_excel(result_df)
                 st.download_button(
-                    label="⬇️ Download Evaluated Results",
-                    data=csv_output.getvalue(),
-                    file_name="evaluated_claims.csv",
-                    mime="text/csv"
+                    label="⬇️ Download Processed Results as Excel",
+                    data=excel_file,
+                    file_name="processed_insurance_claims.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
     
     # Footer
